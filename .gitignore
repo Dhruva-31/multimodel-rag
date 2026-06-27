@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# Vector databases
+database/
+chroma/
+chroma_db/
+
+# Uploaded documents
+uploads/
+
+# IDE
+.vscode/
+.idea/
