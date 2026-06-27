@@ -1,12 +1,17 @@
 from ingestion.pdf_loader import PDFLoader
 from preprocessing.chunker import Chunker
+
 from embeddings.dense_embeddings import DenseEmbedder
+
 from vectorstore.chroma_store import ChromaStore
 
 from retrieval.dense_retriever import DenseRetriever
 from retrieval.hybrid_retriever import HybridRetriever
+from retrieval.reranker import CrossEncoderReranker
 
 from sparse.bm25_index import BM25Retriever
+
+QUERY = "What AI engineering projects help get jobs?"
 
 
 def main():
@@ -40,18 +45,16 @@ def main():
 
     embedder = DenseEmbedder()
 
-    embeddings = embedder.embed_documents(
-        [document.content for document in chunked_documents]
-    )
+    embeddings = embedder.embed_documents([doc.content for doc in chunked_documents])
 
     print(f"Generated {len(embeddings)} embeddings")
 
-    print(f"Embedding dimension: {len(embeddings[0])}")
+    print(f"Embedding dimension: " f"{len(embeddings[0])}")
 
     # =====================================
-    # VECTOR STORE
+    # CHROMA
     # =====================================
-    print("\nStoring in ChromaDB...")
+    print("\nBuilding ChromaDB...")
 
     vector_store = ChromaStore()
 
@@ -60,68 +63,30 @@ def main():
         embeddings,
     )
 
-    print(f"Total vectors stored: " f"{vector_store.collection.count()}")
+    print(f"Stored " f"{vector_store.collection.count()}" f" vectors")
 
     # =====================================
     # BM25
     # =====================================
-    print("\nBuilding BM25 index...")
+    print("\nBuilding BM25...")
 
     bm25 = BM25Retriever()
 
     bm25.index(chunked_documents)
 
-    print("BM25 index ready")
+    print("BM25 ready")
 
     # =====================================
-    # DENSE RETRIEVAL
+    # DENSE
     # =====================================
-    print("\n====================")
-    print("DENSE RETRIEVAL")
-    print("====================")
-
     dense = DenseRetriever()
 
-    dense_results = dense.retrieve(
-        "AI engineering projects",
-        top_k=3,
-    )
-
-    for i, document in enumerate(dense_results["documents"][0]):
-
-        print(f"\nRESULT {i+1}")
-
-        print(document[:250])
-
     # =====================================
-    # BM25 RETRIEVAL
+    # HYBRID
     # =====================================
-    print("\n====================")
-    print("BM25 RETRIEVAL")
-    print("====================")
-
-    sparse_results = bm25.retrieve(
-        "AI engineering projects",
-        top_k=3,
-    )
-
-    for i, (
-        document,
-        score,
-    ) in enumerate(sparse_results):
-
-        print(f"\nRESULT {i+1}")
-
-        print(f"Score: {score}")
-
-        print(document.content[:250])
-
-    # =====================================
-    # HYBRID RETRIEVAL
-    # =====================================
-    print("\n====================")
+    print("\n========================")
     print("HYBRID RETRIEVAL")
-    print("====================")
+    print("========================")
 
     hybrid = HybridRetriever(
         dense_retriever=dense,
@@ -129,8 +94,8 @@ def main():
     )
 
     hybrid_results = hybrid.retrieve(
-        "AI engineering projects",
-        top_k=5,
+        QUERY,
+        top_k=10,
     )
 
     for (
@@ -140,12 +105,43 @@ def main():
     ) in hybrid_results:
 
         print()
+        print(f"Chunk: {chunk_id}")
 
-        print(f"Chunk ID: {chunk_id}")
+        print(f"RRF: {score:.5f}")
 
-        print(f"RRF Score: {score}")
+        print(text[:200])
 
-        print(text[:250])
+    # =====================================
+    # RERANKER
+    # =====================================
+    print("\n========================")
+    print("CROSS ENCODER")
+    print("========================")
+
+    reranker = CrossEncoderReranker()
+
+    documents = [text for _, _, text in hybrid_results]
+
+    reranked = reranker.rerank(
+        QUERY,
+        documents,
+        top_k=5,
+    )
+
+    for rank, (
+        document,
+        score,
+    ) in enumerate(
+        reranked,
+        start=1,
+    ):
+
+        print()
+        print(f"Rank: {rank}")
+
+        print(f"Score: {score:.4f}")
+
+        print(document[:250])
 
 
 if __name__ == "__main__":

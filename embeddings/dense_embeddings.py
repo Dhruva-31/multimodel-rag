@@ -1,22 +1,34 @@
-from fastembed import TextEmbedding
+from sentence_transformers import SentenceTransformer
 
 
 class DenseEmbedder:
 
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
-        self.model = TextEmbedding(model_name=model_name)
+        self.model = SentenceTransformer(model_name)
 
     def embed_documents(
         self,
         texts: list[str],
+        batch_size: int = 32,
     ) -> list[list[float]]:
 
-        embeddings = list(self.model.embed(texts))
+        embeddings = self.model.encode(
+            texts,
+            batch_size=batch_size,
+            normalize_embeddings=True,
+            show_progress_bar=True,
+        )
 
-        return [embedding.tolist() for embedding in embeddings]
+        return embeddings.tolist()
 
-    def embed_query(self, query: str) -> list[float]:
+    def embed_query(
+        self,
+        query: str,
+    ) -> list[float]:
 
-        embedding = next(iter(self.model.embed([query])))
+        embedding = self.model.encode(
+            query,
+            normalize_embeddings=True,
+        )
 
         return embedding.tolist()
