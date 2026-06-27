@@ -2,16 +2,20 @@ from ingestion.pdf_loader import PDFLoader
 from preprocessing.chunker import Chunker
 from embeddings.dense_embeddings import DenseEmbedder
 from vectorstore.chroma_store import ChromaStore
+
 from retrieval.dense_retriever import DenseRetriever
+from retrieval.hybrid_retriever import HybridRetriever
+
 from sparse.bm25_index import BM25Retriever
 
 
 def main():
 
     # =====================================
-    # Ingestion
+    # INGESTION
     # =====================================
     print("Loading PDF...")
+
     loader = PDFLoader()
 
     documents = loader.load("uploads/sample.pdf")
@@ -19,9 +23,10 @@ def main():
     print(f"Loaded {len(documents)} pages")
 
     # =====================================
-    # Chunking
+    # CHUNKING
     # =====================================
     print("\nChunking...")
+
     chunker = Chunker()
 
     chunked_documents = chunker.chunk(documents)
@@ -29,71 +34,118 @@ def main():
     print(f"Created {len(chunked_documents)} chunks")
 
     # =====================================
-    # Embeddings
+    # EMBEDDINGS
     # =====================================
     print("\nGenerating embeddings...")
+
     embedder = DenseEmbedder()
 
-    embeddings = embedder.embed_documents([doc.content for doc in chunked_documents])
+    embeddings = embedder.embed_documents(
+        [document.content for document in chunked_documents]
+    )
 
     print(f"Generated {len(embeddings)} embeddings")
 
     print(f"Embedding dimension: {len(embeddings[0])}")
 
     # =====================================
-    # Chroma
+    # VECTOR STORE
     # =====================================
     print("\nStoring in ChromaDB...")
 
     vector_store = ChromaStore()
 
-    vector_store.add_documents(chunked_documents, embeddings)
+    vector_store.add_documents(
+        chunked_documents,
+        embeddings,
+    )
 
     print(f"Total vectors stored: " f"{vector_store.collection.count()}")
 
     # =====================================
-    # Dense Retrieval
+    # BM25
     # =====================================
-    print("\n==============================")
-    print("DENSE RETRIEVAL")
-    print("==============================")
-
-    dense_retriever = DenseRetriever()
-
-    dense_results = dense_retriever.retrieve("AI engineering projects", top_k=3)
-
-    for i, doc in enumerate(dense_results["documents"][0]):
-        print(f"\nRESULT {i+1}")
-        print(doc[:300])
-
-    # =====================================
-    # BM25 Retrieval
-    # =====================================
-    print("\n==============================")
-    print("BM25 RETRIEVAL")
-    print("==============================")
+    print("\nBuilding BM25 index...")
 
     bm25 = BM25Retriever()
 
     bm25.index(chunked_documents)
 
-    sparse_results = bm25.retrieve("AI engineering projects", top_k=3)
+    print("BM25 index ready")
 
-    for i, (doc, score) in enumerate(sparse_results):
+    # =====================================
+    # DENSE RETRIEVAL
+    # =====================================
+    print("\n====================")
+    print("DENSE RETRIEVAL")
+    print("====================")
+
+    dense = DenseRetriever()
+
+    dense_results = dense.retrieve(
+        "AI engineering projects",
+        top_k=3,
+    )
+
+    for i, document in enumerate(dense_results["documents"][0]):
+
         print(f"\nRESULT {i+1}")
+
+        print(document[:250])
+
+    # =====================================
+    # BM25 RETRIEVAL
+    # =====================================
+    print("\n====================")
+    print("BM25 RETRIEVAL")
+    print("====================")
+
+    sparse_results = bm25.retrieve(
+        "AI engineering projects",
+        top_k=3,
+    )
+
+    for i, (
+        document,
+        score,
+    ) in enumerate(sparse_results):
+
+        print(f"\nRESULT {i+1}")
+
         print(f"Score: {score}")
-        print(doc.content[:300])
+
+        print(document.content[:250])
 
     # =====================================
-    # Sample chunk
+    # HYBRID RETRIEVAL
     # =====================================
-    print("\n==============================")
-    print("SAMPLE CHUNK")
-    print("==============================")
+    print("\n====================")
+    print("HYBRID RETRIEVAL")
+    print("====================")
 
-    print(chunked_documents[0].metadata)
+    hybrid = HybridRetriever(
+        dense_retriever=dense,
+        sparse_retriever=bm25,
+    )
 
-    print(chunked_documents[0].content[:300])
+    hybrid_results = hybrid.retrieve(
+        "AI engineering projects",
+        top_k=5,
+    )
+
+    for (
+        chunk_id,
+        score,
+        text,
+    ) in hybrid_results:
+
+        print()
+
+        print(f"Chunk ID: {chunk_id}")
+
+        print(f"RRF Score: {score}")
+
+        print(text[:250])
 
 
 if __name__ == "__main__":
