@@ -1,15 +1,14 @@
 from ingestion.pdf_loader import PDFLoader
 from preprocessing.chunker import Chunker
 
-from embeddings.dense_embeddings import DenseEmbedder
-
-from vectorstore.chroma_store import ChromaStore
+from sparse.bm25_index import BM25Retriever
 
 from retrieval.dense_retriever import DenseRetriever
 from retrieval.hybrid_retriever import HybridRetriever
 from retrieval.reranker import CrossEncoderReranker
 
-from sparse.bm25_index import BM25Retriever
+from generation.context_builder import ContextBuilder
+from generation.generator import Generator
 
 QUERY = "What AI engineering projects help get jobs?"
 
@@ -17,76 +16,34 @@ QUERY = "What AI engineering projects help get jobs?"
 def main():
 
     # =====================================
-    # INGESTION
+    # Build BM25
+    # (temporary until persistence)
     # =====================================
-    print("Loading PDF...")
+
+    print("Building BM25...")
 
     loader = PDFLoader()
+    chunker = Chunker()
 
     documents = loader.load("uploads/sample.pdf")
 
-    print(f"Loaded {len(documents)} pages")
-
-    # =====================================
-    # CHUNKING
-    # =====================================
-    print("\nChunking...")
-
-    chunker = Chunker()
-
     chunked_documents = chunker.chunk(documents)
-
-    print(f"Created {len(chunked_documents)} chunks")
-
-    # =====================================
-    # EMBEDDINGS
-    # =====================================
-    print("\nGenerating embeddings...")
-
-    embedder = DenseEmbedder()
-
-    embeddings = embedder.embed_documents([doc.content for doc in chunked_documents])
-
-    print(f"Generated {len(embeddings)} embeddings")
-
-    print(f"Embedding dimension: " f"{len(embeddings[0])}")
-
-    # =====================================
-    # CHROMA
-    # =====================================
-    print("\nBuilding ChromaDB...")
-
-    vector_store = ChromaStore()
-
-    vector_store.add_documents(
-        chunked_documents,
-        embeddings,
-    )
-
-    print(f"Stored " f"{vector_store.collection.count()}" f" vectors")
-
-    # =====================================
-    # BM25
-    # =====================================
-    print("\nBuilding BM25...")
 
     bm25 = BM25Retriever()
 
     bm25.index(chunked_documents)
 
-    print("BM25 ready")
+    # =====================================
+    # Dense Retriever
+    # =====================================
 
-    # =====================================
-    # DENSE
-    # =====================================
     dense = DenseRetriever()
 
     # =====================================
-    # HYBRID
+    # Hybrid Retrieval
     # =====================================
-    print("\n========================")
-    print("HYBRID RETRIEVAL")
-    print("========================")
+
+    print("\nHybrid Retrieval...")
 
     hybrid = HybridRetriever(
         dense_retriever=dense,
@@ -98,50 +55,61 @@ def main():
         top_k=10,
     )
 
-    for (
-        chunk_id,
-        score,
-        text,
-    ) in hybrid_results:
-
-        print()
-        print(f"Chunk: {chunk_id}")
-
-        print(f"RRF: {score:.5f}")
-
-        print(text[:200])
-
     # =====================================
-    # RERANKER
+    # Cross Encoder
     # =====================================
-    print("\n========================")
-    print("CROSS ENCODER")
-    print("========================")
+
+    print("\nReranking...")
 
     reranker = CrossEncoderReranker()
 
-    documents = [text for _, _, text in hybrid_results]
+    candidate_docs = [text for _, _, text in hybrid_results]
 
     reranked = reranker.rerank(
         QUERY,
-        documents,
+        candidate_docs,
         top_k=5,
     )
 
-    for rank, (
-        document,
-        score,
-    ) in enumerate(
+    print("\nTop Documents:")
+
+    for rank, (doc, score) in enumerate(
         reranked,
         start=1,
     ):
-
         print()
         print(f"Rank: {rank}")
-
         print(f"Score: {score:.4f}")
+        print(doc[:200])
 
-        print(document[:250])
+    # =====================================
+    # Context Building
+    # =====================================
+
+    print("\nBuilding Context...")
+
+    builder = ContextBuilder()
+
+    context = builder.build(
+        QUERY,
+        [doc for doc, _ in reranked],
+    )
+
+    # =====================================
+    # LLM
+    # =====================================
+
+    print("\nGenerating Answer...")
+
+    generator = Generator(model="qwen3:4b")
+
+    answer = generator.generate(context)
+
+    print("\n====================")
+    print("FINAL ANSWER")
+    print("====================\n")
+
+    print(answer)
 
 
 if __name__ == "__main__":
