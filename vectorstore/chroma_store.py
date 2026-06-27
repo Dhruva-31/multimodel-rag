@@ -18,3 +18,10 @@ class ChromaStore:
             embeddings=embeddings,
             metadatas=[asdict(doc.metadata) for doc in documents],
         )
+
+    def search(self, query_embedding: list[float], top_k: int = 5):
+
+        return self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+        )
