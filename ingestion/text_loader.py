@@ -1,10 +1,9 @@
-import fitz
 from models.document import Document
 from models.metadata import Metadata
 from ingestion.base_loader import BaseLoader
 
 
-class PDFLoader(BaseLoader):
+class TextLoader(BaseLoader):
 
     def load(
         self,
@@ -12,26 +11,29 @@ class PDFLoader(BaseLoader):
         original_filename: str,
     ) -> list[Document]:
 
-        pdf: fitz.Document = fitz.open(file_path)
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8",
+        ) as f:
+
+            text = f.read()
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+
         documents = []
 
-        for page_num in range(len(pdf)):
-            page = pdf[page_num]
-
-            text = page.get_text("text")
+        for i, paragraph in enumerate(paragraphs):
 
             documents.append(
                 Document(
-                    content=text,
+                    content=paragraph,
                     metadata=Metadata(
                         source=file_path,
                         filename=original_filename,
-                        type="pdf",
-                        page=page_num + 1,
+                        type="txt",
+                        paragraph=i + 1,
                     ),
                 )
             )
-
-        pdf.close()
 
         return documents

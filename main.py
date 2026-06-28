@@ -1,115 +1,51 @@
-from ingestion.pdf_loader import PDFLoader
-from preprocessing.chunker import Chunker
-
-from sparse.bm25_index import BM25Retriever
-
-from retrieval.dense_retriever import DenseRetriever
-from retrieval.hybrid_retriever import HybridRetriever
-from retrieval.reranker import CrossEncoderReranker
-
-from generation.context_builder import ContextBuilder
-from generation.generator import Generator
-
-QUERY = "What AI engineering projects help get jobs?"
+from pipelines.ingestion_pipeline import build_knowledge_base
+from pipelines.query_pipeline import ask_question
 
 
 def main():
 
     # =====================================
-    # Build BM25
-    # (temporary until persistence)
+    # CHANGE THIS TO YOUR TEST FILE
     # =====================================
 
-    print("Building BM25...")
+    file_path = "uploads/sample.pdf"
+    # file_path = "uploads/sample.txt"
+    # file_path = "uploads/sample.docx"
 
-    loader = PDFLoader()
-    chunker = Chunker()
+    print()
+    print("=" * 60)
+    print("BUILDING KNOWLEDGE BASE")
+    print("=" * 60)
 
-    documents = loader.load("uploads/sample.pdf")
+    bm25 = build_knowledge_base(file_path, "sample.pdf")
 
-    chunked_documents = chunker.chunk(documents)
+    print()
+    print("Knowledge base ready.")
 
-    bm25 = BM25Retriever()
+    while True:
 
-    bm25.index(chunked_documents)
-
-    # =====================================
-    # Dense Retriever
-    # =====================================
-
-    dense = DenseRetriever()
-
-    # =====================================
-    # Hybrid Retrieval
-    # =====================================
-
-    print("\nHybrid Retrieval...")
-
-    hybrid = HybridRetriever(
-        dense_retriever=dense,
-        sparse_retriever=bm25,
-    )
-
-    hybrid_results = hybrid.retrieve(
-        QUERY,
-        top_k=10,
-    )
-
-    # =====================================
-    # Cross Encoder
-    # =====================================
-
-    print("\nReranking...")
-
-    reranker = CrossEncoderReranker()
-
-    candidate_docs = [text for _, _, text in hybrid_results]
-
-    reranked = reranker.rerank(
-        QUERY,
-        candidate_docs,
-        top_k=5,
-    )
-
-    print("\nTop Documents:")
-
-    for rank, (doc, score) in enumerate(
-        reranked,
-        start=1,
-    ):
         print()
-        print(f"Rank: {rank}")
-        print(f"Score: {score:.4f}")
-        print(doc[:200])
+        query = input("Query (or 'exit'): ")
 
-    # =====================================
-    # Context Building
-    # =====================================
+        if query.lower() == "exit":
+            break
 
-    print("\nBuilding Context...")
+        print()
+        print("=" * 60)
+        print("GENERATING RESPONSE")
+        print("=" * 60)
 
-    builder = ContextBuilder()
+        response = ask_question(
+            query,
+            bm25,
+        )
 
-    context = builder.build(
-        QUERY,
-        [doc for doc, _ in reranked],
-    )
-
-    # =====================================
-    # LLM
-    # =====================================
-
-    print("\nGenerating Answer...")
-
-    generator = Generator(model="qwen3:4b")
-
-    answer = generator.generate(context)
-
-    print("\n====================")
-    print("FINAL ANSWER")
-    print("====================\n")
-
-    print(answer)
+        print()
+        print("=" * 60)
+        print("ANSWER")
+        print("=" * 60)
+        print(response)
+        print("=" * 60)
 
 
 if __name__ == "__main__":

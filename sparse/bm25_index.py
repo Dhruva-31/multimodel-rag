@@ -19,6 +19,9 @@ class BM25Retriever:
 
     def retrieve(self, query: str, top_k: int = 5):
 
+        if self.bm25 is None:
+            raise ValueError("BM25 index not initialized")
+
         scores = self.bm25.get_scores(query.lower().split())
 
         scored = list(zip(self.documents, scores))

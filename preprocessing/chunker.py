@@ -24,8 +24,10 @@ class Chunker:
 
                 metadata = Metadata(
                     source=document.metadata.source,
+                    filename=document.metadata.filename,
                     type=document.metadata.type,
                     page=document.metadata.page,
+                    paragraph=document.metadata.paragraph,
                     chunk_id=global_chunk_id,
                     chunk_size=len(chunk),
                 )
