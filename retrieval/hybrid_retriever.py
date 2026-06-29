@@ -1,7 +1,7 @@
 from collections import defaultdict
 from retrieval.dense_retriever import DenseRetriever
 from sparse.bm25_index import BM25Retriever
-from typing import cast
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class HybridRetriever:
@@ -13,6 +13,7 @@ class HybridRetriever:
     ):
         self.dense = dense_retriever
         self.sparse = sparse_retriever
+        self._executor = ThreadPoolExecutor(max_workers=2)
 
     def retrieve(
         self,
@@ -21,15 +22,11 @@ class HybridRetriever:
         rrf_k: int = 60,
     ):
 
-        dense_results = self.dense.retrieve(
-            query,
-            top_k=top_k,
-        )
+        dense_future = self._executor.submit(self.dense.retrieve, query, top_k)
+        sparse_future = self._executor.submit(self.sparse.retrieve, query, top_k)
 
-        sparse_results = self.sparse.retrieve(
-            query,
-            top_k=top_k,
-        )
+        dense_results = dense_future.result()
+        sparse_results = sparse_future.result()
 
         scores = defaultdict(float)
 
@@ -97,3 +94,6 @@ class HybridRetriever:
             )
             for chunk_id, score in ranked[:top_k]
         ]
+
+    def shutdown(self):
+        self._executor.shutdown(wait=False)

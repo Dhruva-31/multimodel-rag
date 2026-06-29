@@ -8,6 +8,7 @@ from pipelines.ingestion_pipeline import (
 
 from pipelines.query_pipeline import (
     ask_question,
+    build_retriever,
 )
 
 st.set_page_config(
@@ -26,6 +27,7 @@ defaults = {
     "uploaded_file": None,
     "bm25": None,
     "chroma": None,
+    "retriever": None,
     "uploader_key": 0,
     "messages": [],
 }
@@ -116,6 +118,7 @@ with left:
 
             st.session_state.bm25 = bm25
             st.session_state.chroma = chroma
+            st.session_state.retriever = build_retriever(bm25)
 
             st.session_state.ready = True
 
@@ -160,6 +163,9 @@ with left:
         use_container_width=True,
     ):
 
+        if st.session_state.retriever:
+            st.session_state.retriever.shutdown()
+
         st.session_state.ready = False
 
         st.session_state.indexing = False
@@ -171,6 +177,8 @@ with left:
         st.session_state.bm25 = None
 
         st.session_state.chroma = None
+
+        st.session_state.retriever = None
 
         # resets file uploader
         st.session_state.uploader_key += 1
@@ -227,10 +235,7 @@ if query:
 
     with st.spinner("Retrieving..."):
 
-        response = ask_question(
-            query,
-            st.session_state.bm25,
-        )
+        response = ask_question(query, st.session_state.retriever)
 
     # assistant message
     st.session_state.messages.append(
