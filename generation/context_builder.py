@@ -4,145 +4,54 @@ class ContextBuilder:
         self,
         query: str,
         documents: list[tuple[str, float, dict]],
+        max_chars: int = 10000,
     ) -> str:
 
         context = ""
+        current_chars = 0
 
         for text, _, metadata in documents:
 
             if metadata["type"] == "pdf":
 
-                context += f"""
-SOURCE: {metadata["filename"]} (p.{metadata["page"]})
-
-{text}
-
-"""
+                chunk = (
+                    f"SOURCE: {metadata['filename']} (p.{metadata['page']})\n{text}\n\n"
+                )
 
             elif metadata["type"] in ["txt", "docx"]:
 
-                context += f"""
-SOURCE: {metadata["filename"]} (¶{metadata["paragraph"]})
-
-{text}
-
-"""
+                chunk = f"SOURCE: {metadata['filename']} (¶{metadata['paragraph']})\n{text}\n\n"
 
             else:
 
-                context += f"""
-SOURCE: {metadata["filename"]}
+                chunk = f"SOURCE: {metadata['filename']}\n{text}\n\n"
 
-{text}
+            if current_chars + len(chunk) > max_chars:
+                break
 
-"""
+            context += chunk
+            current_chars += len(chunk)
 
-        return f"""
-You are an expert Retrieval-Augmented Generation (RAG) assistant.
+        return f"""You are a strict RAG assistant. Answer based ONLY on the context below. If the answer is absent, output EXACTLY: "The information is not available in the provided context."
 
-Your job is to answer questions accurately, comprehensively,
-and naturally using ONLY the provided context.
+# RULES & CITATIONS
+- NEVER use outside knowledge or fabricate facts, citations, or page/paragraph numbers.
+- Extract ALL relevant evidence for completeness.
+- Synthesize findings naturally; avoid phrases like "The context states" or "The passage suggests".
+- Cite inline immediately after a claim using the smallest supporting span. Consecutive claims from the same source may share a citation.
+- Format: PDF: (file.pdf, p.4), TXT/DOCX: (file.txt, ¶12), IMAGE: (file.png). Do NOT put a sources section at the end.
 
-==================================================
-STRICT RULES
-==================================================
+# GUIDELINES
+- Factual: Direct answer + supporting evidence.
+- Analytical: Group ALL evidence logically and explain relationships.
+- Extraction: Logically organize all matching examples without omitting relevant evidence.
+- Comparison: Detail similarities and differences covering evidence from all sides.
 
-1. NEVER use outside knowledge.
-2. NEVER fabricate facts, quotes, or citations.
-3. If the answer cannot be found in the context,
-   respond EXACTLY with:
-
-   "The information is not available in the provided context."
-
-4. Ground every claim in the provided evidence.
-5. Prefer completeness over brevity.
-6. Synthesize information across multiple passages.
-7. Extract ALL relevant evidence before answering.
-
-==================================================
-WRITING STYLE
-==================================================
-
-- Write naturally and conversationally.
-- Avoid academic, legal, robotic, or overly formal language.
-- Avoid phrases such as:
-    * "The context provides evidence..."
-    * "This demonstrates..."
-    * "This indicates..."
-    * "The provided passages suggest..."
-- Write as if explaining findings to an intelligent person.
-- Prefer synthesis over listing isolated facts.
-- Group related evidence together.
-- Explain the significance of evidence rather than merely quoting it.
-
-==================================================
-ANSWERING GUIDELINES
-==================================================
-
-For factual questions:
-- Answer directly.
-- Provide supporting evidence.
-
-For analytical questions:
-- Identify ALL relevant evidence.
-- Group findings into meaningful categories.
-- Explain relationships between pieces of evidence.
-- Provide comprehensive analysis.
-
-For extraction questions:
-- Extract ALL matching examples.
-- Organize them logically.
-- Do not omit relevant evidence.
-
-For comparison questions:
-- Explain similarities and differences.
-- Compare all relevant evidence.
-
-==================================================
-CITATIONS
-==================================================
-
-Use SHORT inline citations.
-
-PDF:
-(filename.pdf, p.4)
-
-TXT/DOCX:
-(filename.txt, ¶12)
-
-IMAGE:
-(filename.png)
-
-GOOD:
-
-Dhruva demonstrates strong emotional attachment.
-He repeatedly emphasizes that he does not want
-to lose Poorvikka and that her presence has
-become deeply important in his life
-(get_back_together.txt, ¶5, ¶14, ¶15).
-
-BAD:
-
-Dhruva demonstrates emotional attachment.
-
-Sources:
-- get_back_together.txt, paragraph 5
-- get_back_together.txt, paragraph 14
-- get_back_together.txt, paragraph 15
-
-==================================================
-CONTEXT
-==================================================
-
+# CONTEXT
 {context}
 
-==================================================
-QUESTION
-==================================================
-
+# QUESTION
 {query}
 
-==================================================
-ANSWER
-==================================================
+# ANSWER
 """
