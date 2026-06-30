@@ -11,6 +11,15 @@
 
 ---
 
+## 🚀 Live Demo
+
+**Interactive Demo:**  
+🔗 https://multimodel-rag-31.streamlit.app/
+
+Upload documents, build a knowledge base, and query them using hybrid retrieval, reranking, and grounded generation.
+
+---
+
 ## 🚀 Overview
 
 This project implements a **multimodal Retrieval-Augmented Generation (RAG) pipeline** capable of ingesting and querying multiple document formats while minimizing hallucinations through retrieval grounding and citation validation.
